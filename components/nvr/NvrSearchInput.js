@@ -12,7 +12,7 @@ const NvrSearchInput = props => {
     });
 
     return (
-        <View >
+        <View style={{ width: '100%'}}>
             <View style={{ width: '98%', alignItems: 'center' }}>
                 <Text style={{ marginBottom: 5, marginLeft: -272 }}>NVR Search</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingBottom: 10 }} >
@@ -20,6 +20,7 @@ const NvrSearchInput = props => {
                                 onChangeText={ text => setSearchText(text) }
                                 autoFocus={true}
                                 autoCapitalize={'none'}
+                                autoCorrect={false}
                                 style={{ marginLeft: -2, fontSize: 20, height: 40, width: 310,  borderColor: 'grey', borderWidth: 2, borderTopLeftRadius: 5, borderBottomLeftRadius: 5, padding: 5 }} />
                     <TouchableOpacity onPress={ startSearch } 
                                     style={{  borderColor: 'grey', borderWidth: 2, borderLeftWidth: 0, borderTopRightRadius: 5, borderBottomRightRadius: 5, padding: 5, backgroundColor: 'grey' }}>
@@ -33,7 +34,7 @@ const NvrSearchInput = props => {
             <View>
                 { props.showAutomatches && props.autoMatches.length > 0 && props.searchText.length > ( isNaN(parseInt(props.searchText)) ? 2 : 0 )  ?
                     <FlatList
-                        contentContainerStyle={{ width: 600, maxWidth: Dimensions.get('window').width - 20, marginRight: 'auto', marginLeft: 'auto', overflow: 'visible', marginTop: 10, borderRadius: 5, paddingBottom: 160}}
+                        contentContainerStyle={{ width: 600, maxWidth: Dimensions.get('window').width - 20, marginRight: 'auto', marginLeft: 'auto', overflow: 'visible', marginTop: 10, borderRadius: 5, paddingBottom: 300}}
                         data={ sortByCompany(props.autoMatches) }
                         renderItem={ ({ item }) => <ScrollView  horizontal={true} 
                                                                 showHorizontal showsHorizontalScrollIndicator={false}

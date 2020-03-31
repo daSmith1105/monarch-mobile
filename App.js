@@ -9,15 +9,13 @@ import JetEngineMain from './components/jetengine/JetEngineMain';
 import SlideMenu from './components/nav/SlideMenu';
 
 const API_URL = config.backend
-let sessionCheckTimeout;
-
 
 export default class App extends React.Component {
   constructor(props) {
     super(props);
 
     this.state = {
-      apiUrl: 'http://192.168.1.69:8081/', //API_URL,
+      apiUrl: API_URL,
       isLoggedIn: false,
       user: {},
       token: '',
@@ -27,10 +25,11 @@ export default class App extends React.Component {
       nvrReferenceList: [],
       loading: true,
       sessionExpired: false,
-      sessionCheckRunning: false,
       showMenu: false
     };
 
+    this.verifySessionHandler;
+    this.updateNvrRefListHandler;
   }
 
   componentDidMount = () => {
@@ -39,7 +38,8 @@ export default class App extends React.Component {
   };
 
   componentWillUnmount = () => {
-    this.setState({ sessionCheckRunning: false });
+    clearTimeout(this.verifySessionHandler);
+    clearTimeout(this.updateNvrRefListHandler);
   };
 
   verifySession = async( id, session ) => {
@@ -47,27 +47,27 @@ export default class App extends React.Component {
     let sessionKey = this.state.sessionKey;
     if(id) { userId = id };
     if(session) { sessionKey = session };
-
-    await fetch( this.state.apiUrl + 'api/checksession/' + userId + '/' + sessionKey  )
-    .then( res => {
-      console.log(res.status)
-      if( ( res.status === 404 || res.status === 203 || res.status === 400) && this.state.isLoggedIn ) {
-        throw new Error()
-      };
-      console.log('session is valid');
-      this.sessionCheckTimeout = setTimeout( function() {
-        this.verifySession()
-      }.bind(this), 10000);
-    })
-    .catch( (error) => {
-      console.log('error while verifying session ' , error)
-      clearTimeout(this.sessionCheckTimeout);
-      this.clearLocalUserData('expired');
-    });
+      await fetch( this.state.apiUrl + 'api/checksession/' + userId + '/' + sessionKey  )
+      .then( res => {
+        if( !res.ok ) {
+          throw new Error( 'Bad response from verifySession');
+        }
+        if( res.status !== 404 && res.status !== 203 && res.status !== 400 ) {
+          this.verifySessionHandler = setTimeout( () => { this.verifySession(userId, sessionKey); this.verifySessionHandler = 0 }, 10000 );
+        } else {
+          this.clearLocalUserData('expired');
+        }
+        return;
+      })
+      .catch( (error) => {
+        console.log('error while verifying session ' , error)
+        this.clearLocalUserData('expired');
+      });
   };
 
   clearLocalUserData = async( expired ) => {
-    clearTimeout(sessionCheckTimeout);
+    clearTimeout(this.verifySessionHandler);
+    clearTimeout(this.updateNvrRefListHandler);
     await AsyncStorage.removeItem('autoLogin');
     await AsyncStorage.removeItem('user');
     await AsyncStorage.removeItem('token');
@@ -81,7 +81,6 @@ export default class App extends React.Component {
       activeView: 'login',
       nvrReferenceList: [],
       sessionExpired: expired ? true : false,
-      sessionCheckRunning: false,
       loading: false,
       showMenu: false
     });
@@ -89,7 +88,6 @@ export default class App extends React.Component {
 
   clearExpiredSessionModal = () => {
     this.setState({ sessionExpired: false, sessionKey: '' });
-    clearTimeout(this.sessionCheckTimeout);
   };
 
   checkAutoLogin = async () => {
@@ -99,33 +97,33 @@ export default class App extends React.Component {
       const user = await AsyncStorage.getItem('user');
       const sessionKey = await AsyncStorage.getItem('sessionKey');
       const token = await AsyncStorage.getItem('token');
-      if (autoLogin !== null) {
-        this.setState({ 
-          autoLogin: true,
-          user: JSON.parse(user),
-          sessionKey,
-          token ,
-          activeView: 'nvr-main',
-          isLoggedIn: true,
-          loading: false,
-          sessionCheckRunning: true,
-        }, () => {
-          this.getNvrReferenceList();
-          setTimeout( function() { this.verifySession( JSON.parse(user).bID, sessionKey )}.bind(this), 1000 );
-        });
-      } else {
-        this.clearLocalUserData();
-        clearTimeout(this.sessionCheckTimeout);
-      }
+      await Promise.all([autoLogin,user,sessionKey,token]) 
+      .then( () => {
+        if (autoLogin !== null) {
+          this.setState({ 
+            autoLogin: true,
+            user: JSON.parse(user),
+            sessionKey,
+            token,
+            activeView: 'nvr-main',
+            isLoggedIn: true,
+            loading: false
+          }, () => {
+            this.getNvrReferenceList();
+            setTimeout( () => this.verifySession( this.state.user.bID, this.state.sessionKey ), 1000 );
+            setTimeout( () => this.getNvrReferenceList(), 300000 ); // update ref list for dropdown every 5 minutes
+          });
+        } else {
+          this.clearLocalUserData();
+        }
+      })
     } catch (error) {
       console.log('could not load data from local storage. ', error);
       this.clearLocalUserData();
-      clearTimeout(this.sessionCheckTimeout);
     }
   };
 
   setUserToLocalStorage = async( user, token, sessionKey ) => {
-    console.log(user, token, sessionKey);
     try {
       await AsyncStorage.setItem('user', JSON.stringify(user));
       await AsyncStorage.setItem('sessionKey', sessionKey);
@@ -138,19 +136,18 @@ export default class App extends React.Component {
     this.setState({ autoLogin: true });
   };
 
-  setUserToState = ( user, token, sessionKey ) => {
-    this.setState({
-      isLoggedIn: true,
-      user,
-      token,
-      sessionKey,
-      activeView: 'nvr-main',
-      sessionCheckRunning: true,
-      loading: false
-    }, () => {
-      this.getNvrReferenceList();
-      setTimeout( function() { this.verifySession()}.bind(this), 1000 );
-    });
+  setUserToState = async( user, token, sessionKey ) => {
+    await this.setState({
+            isLoggedIn: true,
+            user,
+            token,
+            sessionKey,
+            activeView: 'nvr-main',
+            loading: false
+          });
+    this.getNvrReferenceList();
+    setTimeout( () => this.verifySession( this.state.user.bID, this.state.sessionKey ), 1000 );
+    setTimeout( () => this.getNvrReferenceList(), 300000 ); // update ref list for dropdown every 5 minutes
   };
 
   setActiveView = (view) => {
@@ -158,7 +155,7 @@ export default class App extends React.Component {
   };
 
   getNvrReferenceList = async() => {
-    fetch( this.state.apiUrl + 'api/nvrreflist' )
+    await fetch( this.state.apiUrl + 'api/nvrreflist' )
     .then( res => {
       if(!res.ok){
         throw new Error('response bad');
@@ -166,10 +163,16 @@ export default class App extends React.Component {
       return res.json()
     })
     .then( data => {
-      this.setState({ nvrReferenceList: data.result })
+      if ( data.result.length > 0 ) {
+        this.setState({ nvrReferenceList: data.result });
+      } else {
+        this.setState({ nvrReferenceList: [] });
+      }
+      this.updateNvrRefListHandler = setTimeout( () => { this.getNvrReferenceList(); this.updateNvrRefListHandler = 0 }, 300000 );
     })
     .catch( error => {
       console.log(error)
+      this.setState({ nvrReferenceList: [] });
     })
   };
 
@@ -178,7 +181,6 @@ export default class App extends React.Component {
   };
 
   logoutUser = () => {
-    clearTimeout(sessionCheckTimeout);
     fetch( this.state.apiUrl + 'logout/' + this.state.user.bID + '/' + this.state.user.sName )
     .then ( () => {
       this.clearLocalUserData();

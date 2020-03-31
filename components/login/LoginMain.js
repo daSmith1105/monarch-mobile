@@ -14,11 +14,12 @@ class Login extends React.Component {
         error: false,
         emptyError: false,
         sessionExists: false,
-        user: null,
+        user: {},
         sessionKey: '',
-        token: ''
+        token: '',
+        serverError: false,
+        processing: false
     };
-
   };
 
   componentDidMount = () => {
@@ -29,27 +30,17 @@ class Login extends React.Component {
       error: false,
       emptyError: false,
       sessionExists: false,
-      user: null,
+      user: {},
       sessionKey: '',
-      token: ''
-    });
-  };
-  componentWillUnmount = () => {
-    this.setState({
-      username: '',
-      password: '',
-      autoLogin: false,
-      error: false,
-      emptyError: false,
-      sessionExists: false,
-      user: null,
-      sessionKey: '',
-      token: ''
+      token: '',
+      serverError: false,
+      processing: 'false'
     });
   };
 
   handleSubmit = async(e) => {
     e.preventDefault();
+    this.setState({ processing: true });
     if (this.state.username.trim() === '' || this.state.password.toString() === '') {
         this.setState({ emptyError: true })
     } else {
@@ -63,21 +54,25 @@ class Login extends React.Component {
                 password: this.state.password.trim()
             })
         })
-        .then(function(response) {
-            if (!response.ok) {
+        .then( res => {
+            if (!res.ok) {
                 throw new Error('bad response')
             };
-            return response;
+            return res.json();
         })
-        .then(response => response.json())
         .then( data => {
-          if (data.sessionExists) {
-            // show session exists modal and let user decide if they want to void their previous session
-            this.setState({ sessionExists: true, user: data.user, token: data.token, sessionKey: data.sessionKey });
+          if( data ) {
+            if (data.sessionExists) {
+              // show session exists modal and let user decide if they want to void their previous session
+              this.setState({ sessionExists: true, user: data.user, token: data.token, sessionKey: data.sessionKey });
+            } else {
+              // if autologin is true set the user to local storage so they don't have to log in repeatedly
+              this.state.autoLogin && this.props.setUserToLocalStorage( data.user, data.token, data.sessionKey );
+              this.props.setUserToState( data.user, data.token, data.sessionKey );
+            }
+            this.setState({ processing: false });
           } else {
-            // if autologin is true set the user to local storage so they don't have to log in repeatedly
-            this.state.autoLogin && this.props.setUserToLocalStorage( data.user, data.token, data.sessionKey );
-            this.props.setUserToState( data.user, data.token, data.sessionKey );
+            throw new Error('login error')
           }
         })
         .catch(error => {
@@ -91,7 +86,9 @@ class Login extends React.Component {
               sessionExists: false,
               user: {},
               sessionKey: '',
-              token: ''
+              token: '',
+              serverError: false,
+              processing: false
             });
         }); 
     };
@@ -107,17 +104,38 @@ class Login extends React.Component {
       sessionExists: false,
       user: {},
       sessionKey: '',
-      token: ''
+      token: '',
+      serverError: false,
+      processing: false
     });
   };
 
-  forceLogin = () => {
-    fetch( this.props.apiUrl + 'forcelogin/' + this.state.user.bID + '/' + this.state.user.sName + '/' + this.state.sessionKey )
-    .catch( error => console.log(error))
-    // if autologin is true set the user to local storage so they don't have to log in
-    this.state.autoLogin && this.props.setUserToLocalStorage( this.state.user, this.state.token, this.state.sessionKey );
-    // set the user, token, and session key in our global state
-    this.props.setUserToState( this.state.user, this.state.token, this.state.sessionKey );
+  forceLogin = async() => {
+    await fetch( this.props.apiUrl + 'forcelogin/' + this.state.user.bID + '/' + this.state.user.sName + '/' + this.state.sessionKey )
+    .then( (res) => {
+      if( !res.ok ) {
+        throw new Error('server error');
+      }
+        // if autologin is true set the user to local storage so they don't have to log in
+        this.state.autoLogin && this.props.setUserToLocalStorage( this.state.user, this.state.token, this.state.sessionKey );
+        // set the user, token, and session key in our global state
+        this.props.setUserToState( this.state.user, this.state.token, this.state.sessionKey );
+    })
+    .catch( error => {
+      console.log(error);
+      this.setState({
+        username: '',
+        password: '',
+        autoLogin: false,
+        error: false,
+        emptyError: false,
+        sessionExists: false,
+        user: {},
+        sessionKey: '',
+        token: '',
+        serverError: true
+      });
+    })
   };
     
   render() {
@@ -194,7 +212,7 @@ class Login extends React.Component {
 
               <View style={ autoLoginContainer }>
                 <Text style={{ marginLeft: 200, marginRight: 8, color: 'white', fontSize: 18, fontWeight: 'bold' }}>
-                  Auto-Login
+                  Auto-Session
                 </Text>
                 <Switch
                   style={{ transform: [{ scaleX: .8 }, { scaleY: .8 }] }}
@@ -218,14 +236,24 @@ class Login extends React.Component {
                     null
                 }
 
+                { this.state.serverError ? 
+                    <Text style={{ height: 18, fontSize: 18, fontWeight: 'bold', color: 'red', marginTop: 10 }}>Server Error. Contact Administrator.</Text> :
+                    null
+                }
+
                 { this.state.loginCancelled ? 
                     <Text style={{ height: 18, fontSize: 18, fontWeight: 'bold', color: 'red', marginTop: 10 }}>Login Cancelled</Text> :
                     null
                 }
 
                 <View style={{ flexDirection: 'row' }}>
-                  <TouchableOpacity style={ loginButtonStyle } onPress={ this.handleSubmit }>
-                    <Text style={{ color: '#135ba2', fontSize: 22, fontWeight: 'bold' }}>Login</Text>
+                  <TouchableOpacity style={ loginButtonStyle } onPress={ this.state.processing ? this.handleSubmit : console.log('') }>
+
+                    { this.state.processing ? 
+                      <Text style={{ color: '#135ba2', fontSize: 22, fontWeight: 'bold' }}>Login</Text> :
+                      <Text style={{ color: '#135ba2', fontSize: 22, fontWeight: 'bold' }}>Processing ...</Text>
+                    }
+
                   </TouchableOpacity>
                 </View>
               
@@ -250,7 +278,7 @@ const styles = {
     width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'lightgrey',
+    // backgroundColor: 'lightgrey',
     position: 'relative',
   },
   innerContainerStyle: {

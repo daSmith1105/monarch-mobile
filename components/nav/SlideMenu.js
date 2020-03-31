@@ -24,15 +24,6 @@ const SlideMenu = props => {
                                   elevation: 8 }}>
         <Text style={{ fontSize: 16, fontWeight: 'bold' }}>Logout</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={ () => alert('clicked 2') } style={{ justifyContent: 'center', alignItems: 'center', width: '80%', height: 60, margin: 20, backgroundColor: 'white', borderRadius: 5  }}>
-        <Text style={{ fontSize: 16, fontWeight: 'bold' }}>Option 1</Text>
-      </TouchableOpacity>
-      <TouchableOpacity onPress={ () => alert('clicked 3') } style={{ justifyContent: 'center', alignItems: 'center', width: '80%', height: 60, margin: 20, backgroundColor: 'white', borderRadius: 5   }}>
-        <Text style={{ fontSize: 16, fontWeight: 'bold' }}>Option 2</Text>
-      </TouchableOpacity>
-      <TouchableOpacity onPress={ () => alert('clicked 4') } style={{ justifyContent: 'center', alignItems: 'center', width: '80%', height: 60, margin: 20, backgroundColor: 'white', borderRadius: 5  }}>
-        <Text style={{ fontSize: 16, fontWeight: 'bold' }}>Option 3</Text>
-      </TouchableOpacity>
       </View>
       <View style={{  width: '20%', 
                       height: '100%', 
